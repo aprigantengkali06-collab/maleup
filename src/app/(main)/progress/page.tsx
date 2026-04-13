@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine, CartesianGrid } from 'recharts';
 import { Lock, Plus, Award, Scale, Ruler, Zap } from 'lucide-react';
@@ -18,9 +18,9 @@ import { useDashboardData } from '@/lib/hooks/useDashboardData';
 import { useWeightChartData, useLogWeight } from '@/lib/hooks/useWeightLog';
 import { useLogMeasurement } from '@/lib/hooks/useMeasurementLog';
 import { projectPenisLength } from '@/lib/utils/formulas';
+import { decrypt } from '@/lib/utils/encryption';
 import type { UserAchievement } from '@/lib/types';
 
-// ─── Log Weight Dialog ─────────────────────────────────────────────
 function LogWeightDialog({ open, onClose, lastWeight }: { open: boolean; onClose: () => void; lastWeight: number }) {
   const [weight, setWeight] = useState(String(lastWeight));
   const profile = useUserStore((s) => s.profile);
@@ -28,8 +28,16 @@ function LogWeightDialog({ open, onClose, lastWeight }: { open: boolean; onClose
 
   const handleSubmit = async () => {
     const w = parseFloat(weight);
-    if (isNaN(w) || w < 30 || w > 300) { toast.error('Masukkan berat yang valid (30–300 kg)'); return; }
-    if (!profile) { toast.error('Profil tidak ditemukan'); return; }
+    if (isNaN(w) || w < 30 || w > 300) {
+      toast.error('Masukkan berat yang valid (30–300 kg)');
+      return;
+    }
+
+    if (!profile) {
+      toast.error('Profil tidak ditemukan');
+      return;
+    }
+
     try {
       await logWeight({
         userId: profile.id,
@@ -63,7 +71,6 @@ function LogWeightDialog({ open, onClose, lastWeight }: { open: boolean; onClose
   );
 }
 
-// ─── Log Measurement Dialog ────────────────────────────────────────
 function LogMeasurementDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
   const [length, setLength] = useState('');
   const [girth, setGirth] = useState('');
@@ -73,9 +80,18 @@ function LogMeasurementDialog({ open, onClose }: { open: boolean; onClose: () =>
 
   const handleSubmit = async () => {
     const l = parseFloat(length);
-    if (isNaN(l) || l < 5 || l > 30) { toast.error('Masukkan panjang yang valid (5–30 cm)'); return; }
-    if (!profile) { toast.error('Profil tidak ditemukan'); return; }
-    const g = parseFloat(girth) || l * 0.85; // estimasi jika tidak diisi
+    if (isNaN(l) || l < 5 || l > 30) {
+      toast.error('Masukkan panjang yang valid (5–30 cm)');
+      return;
+    }
+
+    if (!profile) {
+      toast.error('Profil tidak ditemukan');
+      return;
+    }
+
+    const g = parseFloat(girth) || l * 0.85;
+
     try {
       await logMeasurement({
         userId: profile.id,
@@ -133,10 +149,10 @@ function LogMeasurementDialog({ open, onClose }: { open: boolean; onClose: () =>
   );
 }
 
-// ─── Achievement Badge ─────────────────────────────────────────────
 function AchievementBadge({ ua }: { ua: UserAchievement }) {
   const ach = ua.achievement;
   const unlocked = !!ua.unlocked_at;
+
   return (
     <motion.div
       initial={{ scale: 0.9, opacity: 0 }}
@@ -154,9 +170,9 @@ function AchievementBadge({ ua }: { ua: UserAchievement }) {
   );
 }
 
-// ─── Stat Row ─────────────────────────────────────────────────────
 function StatRow({ icon, label, start, now, delta, positive }: { icon: React.ReactNode; label: string; start: string; now: string; delta: string; positive?: boolean }) {
   const isPositive = positive ?? delta.startsWith('+');
+
   return (
     <div className="flex items-center gap-3 py-3 border-b border-zinc-800/60 last:border-0">
       <div className="w-8 h-8 rounded-lg bg-zinc-800 flex items-center justify-center flex-shrink-0">{icon}</div>
@@ -173,9 +189,6 @@ function StatRow({ icon, label, start, now, delta, positive }: { icon: React.Rea
   );
 }
 
-// ─── Main Page ─────────────────────────────────────────────────────
-
-// ─── Skeleton Loading ──────────────────────────────────────────────
 function ProgressLoadingSkeleton() {
   return (
     <div className="space-y-4 pb-6">
@@ -195,31 +208,101 @@ export default function ProgressPage() {
   const [tab, setTab] = useState('weight');
   const [showWeightLog, setShowWeightLog] = useState(false);
   const [showMeasureLog, setShowMeasureLog] = useState(false);
+  const [decryptedLength, setDecryptedLength] = useState<number | null>(null);
+  const [isDecryptingLength, setIsDecryptingLength] = useState(false);
 
   const profile = useUserStore((s) => s.profile);
   const { data, isLoading } = useDashboardData();
 
-  // ── Hook calls MUST come before any early return ──────────────────
-  const userId       = profile?.id ?? '';
+  const userId = profile?.id ?? '';
   const targetWeight = profile?.target_weight_kg ?? (profile?.starting_weight_kg ?? 80) - 10;
   const { data: chartData = [] } = useWeightChartData(userId, targetWeight);
+
+  useEffect(() => {
+    let isActive = true;
+
+    async function decryptLength() {
+      const raw = profile?.starting_penis_length;
+      const currentUserId = profile?.id;
+
+      if (!raw || !currentUserId) {
+        if (isActive) {
+          setDecryptedLength(null);
+          setIsDecryptingLength(false);
+        }
+        return;
+      }
+
+      if (isActive) {
+        setIsDecryptingLength(true);
+      }
+
+      try {
+        const directNumber = parseFloat(raw);
+        if (!isNaN(directNumber) && directNumber > 0 && directNumber < 30) {
+          if (isActive) {
+            setDecryptedLength(directNumber);
+          }
+          return;
+        }
+
+        const decryptedValue = await decrypt(raw, currentUserId);
+        const parsed = parseFloat(decryptedValue);
+
+        if (isActive) {
+          setDecryptedLength(!isNaN(parsed) && parsed > 0 ? parsed : null);
+        }
+      } catch {
+        if (isActive) {
+          setDecryptedLength(null);
+        }
+      } finally {
+        if (isActive) {
+          setIsDecryptingLength(false);
+        }
+      }
+    }
+
+    void decryptLength();
+
+    return () => {
+      isActive = false;
+    };
+  }, [profile?.id, profile?.starting_penis_length]);
 
   if (isLoading && !data?.profile) {
     return <ProgressLoadingSkeleton />;
   }
 
   const latestWeight = profile?.current_weight_kg ?? 0;
-  const startWeight  = profile?.starting_weight_kg ?? 0;
-  const weightDelta  = latestWeight - startWeight;
+  const startWeight = profile?.starting_weight_kg ?? 0;
+  const weightDelta = latestWeight - startWeight;
   const programDay = profile?.program_start_date
     ? Math.floor((Date.now() - new Date(profile.program_start_date).getTime()) / 86400000) + 1
     : 1;
   const programProgress = Math.min(100, (programDay / 168) * 100);
-  const tickInterval    = chartData.length > 1 ? Math.floor((chartData.length - 1) / 4) : 0;
+  const tickInterval = chartData.length > 1 ? Math.floor((chartData.length - 1) / 4) : 0;
 
+  const startLength = decryptedLength ?? 11;
   const projectedNow = profile
-    ? projectPenisLength(parseFloat(profile.starting_penis_length ?? '11'), profile.starting_weight_kg, profile.current_weight_kg)
+    ? projectPenisLength(startLength, profile.starting_weight_kg, profile.current_weight_kg)
     : 11;
+  const projectedLengthDelta = projectedNow - startLength;
+  const startLengthDisplay = isDecryptingLength
+    ? 'Mengdekripsi...'
+    : decryptedLength !== null
+      ? `${decryptedLength} cm`
+      : '—';
+  const projectedNowDisplay = isDecryptingLength
+    ? 'Mengdekripsi...'
+    : decryptedLength !== null
+      ? `${projectedNow.toFixed(2)} cm`
+      : '—';
+  const projectedDeltaDisplay = isDecryptingLength
+    ? 'Mengdekripsi...'
+    : decryptedLength !== null
+      ? `+${projectedLengthDelta.toFixed(2)} cm`
+      : '—';
 
   return (
     <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-4 pb-6">
@@ -228,7 +311,6 @@ export default function ProgressPage() {
         <p className="text-sm text-zinc-400 mt-0.5">Hari ke-{programDay} dari 168</p>
       </div>
 
-      {/* Program bar */}
       <Card className="space-y-2">
         <div className="flex justify-between text-xs text-zinc-400">
           <span>Progres Program</span>
@@ -248,7 +330,6 @@ export default function ProgressPage() {
           <TabsTrigger value="achievements" className="text-xs">Pencapaian</TabsTrigger>
         </TabsList>
 
-        {/* ── TAB BERAT ── */}
         <TabsContent value="weight" className="space-y-4">
           <Card className="space-y-3">
             <p className="text-xs uppercase tracking-widest text-zinc-500 font-medium">Grafik Berat</p>
@@ -276,8 +357,8 @@ export default function ProgressPage() {
           <div className="grid grid-cols-3 gap-2">
             {[
               { label: 'Sekarang', value: latestWeight > 0 ? `${latestWeight} kg` : '— kg', color: 'text-white' },
-              { label: 'Target',   value: `${targetWeight} kg`,                              color: 'text-emerald-400' },
-              { label: 'Tersisa',  value: latestWeight > 0 ? `${Math.abs(latestWeight - targetWeight).toFixed(1)} kg` : '—', color: 'text-amber-400' },
+              { label: 'Target', value: `${targetWeight} kg`, color: 'text-emerald-400' },
+              { label: 'Tersisa', value: latestWeight > 0 ? `${Math.abs(latestWeight - targetWeight).toFixed(1)} kg` : '—', color: 'text-amber-400' },
             ].map((s) => (
               <Card key={s.label} className="text-center py-2">
                 <p className="text-xs text-zinc-500">{s.label}</p>
@@ -291,14 +372,14 @@ export default function ProgressPage() {
           <LogWeightDialog open={showWeightLog} onClose={() => setShowWeightLog(false)} lastWeight={latestWeight} />
         </TabsContent>
 
-        {/* ── TAB UKURAN ── */}
         <TabsContent value="measure" className="space-y-4">
           <Card className="space-y-3">
             <div className="flex items-center gap-2">
               <Lock className="h-4 w-4 text-zinc-500" />
               <p className="text-xs text-zinc-500">Data terenkripsi AES-256</p>
             </div>
-            {parseFloat(profile?.starting_penis_length ?? '0') === 0 ? (
+
+            {!profile?.starting_penis_length ? (
               <div className="text-center py-6 space-y-2">
                 <Ruler className="h-10 w-10 text-zinc-700 mx-auto" />
                 <p className="text-zinc-400 text-sm">Kamu belum mencatat data ini</p>
@@ -314,9 +395,9 @@ export default function ProgressPage() {
                     <span className="text-zinc-400">Awal</span>
                     <span className="text-zinc-400">Proyeksi sekarang</span>
                   </div>
-                  <div className="flex justify-between mt-1">
-                    <span className="text-white font-bold">{profile?.starting_penis_length} cm</span>
-                    <span className="text-blue-400 font-bold">{projectedNow.toFixed(2)} cm</span>
+                  <div className="flex justify-between mt-1 gap-3">
+                    <span className="text-white font-bold">{startLengthDisplay}</span>
+                    <span className="text-blue-400 font-bold text-right">{projectedNowDisplay}</span>
                   </div>
                 </div>
               </div>
@@ -328,7 +409,6 @@ export default function ProgressPage() {
           <LogMeasurementDialog open={showMeasureLog} onClose={() => setShowMeasureLog(false)} />
         </TabsContent>
 
-        {/* ── TAB RINGKASAN ── */}
         <TabsContent value="summary" className="space-y-3">
           <Card className="space-y-0 divide-y divide-zinc-800/60">
             <StatRow
@@ -342,9 +422,9 @@ export default function ProgressPage() {
             <StatRow
               icon={<Ruler className="h-4 w-4 text-blue-400" />}
               label="Panjang Proyeksi"
-              start={`${profile?.starting_penis_length ?? 11} cm`}
-              now={`${projectedNow.toFixed(2)} cm`}
-              delta={`+${(projectedNow - parseFloat(profile?.starting_penis_length ?? '11')).toFixed(2)} cm`}
+              start={startLengthDisplay}
+              now={projectedNowDisplay}
+              delta={projectedDeltaDisplay}
               positive
             />
             <StatRow
@@ -359,9 +439,9 @@ export default function ProgressPage() {
           <Card>
             <div className="grid grid-cols-3 gap-3 text-center">
               {[
-                { label: 'Hari Aktif', value: programDay,                                  color: 'text-blue-400' },
-                { label: 'Workout',    value: data?.todaySummary?.workoutsCompleted ?? 0,  color: 'text-amber-400' },
-                { label: 'Streak',     value: data?.todaySummary?.streakDays ?? 0,         color: 'text-emerald-400' },
+                { label: 'Hari Aktif', value: programDay, color: 'text-blue-400' },
+                { label: 'Workout', value: data?.todaySummary?.workoutsCompleted ?? 0, color: 'text-amber-400' },
+                { label: 'Streak', value: data?.todaySummary?.streakDays ?? 0, color: 'text-emerald-400' },
               ].map((s) => (
                 <div key={s.label}>
                   <p className={`text-2xl font-bold ${s.color}`}>{s.value}</p>
@@ -372,7 +452,6 @@ export default function ProgressPage() {
           </Card>
         </TabsContent>
 
-        {/* ── TAB PENCAPAIAN ── */}
         <TabsContent value="achievements">
           {(data?.achievements ?? []).length === 0 ? (
             <Card className="text-center py-8">
