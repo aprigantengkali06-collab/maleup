@@ -1,6 +1,7 @@
 // src/app/page.tsx
 import { redirect } from 'next/navigation';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
+import { isRedirectError } from 'next/dist/client/components/redirect-error';
 
 export default async function HomePage() {
   try {
@@ -24,7 +25,9 @@ export default async function HomePage() {
     } else {
       redirect('/onboarding');
     }
-  } catch {
+  } catch (error) {
+    // Redirect error harus diteruskan, bukan ditangkap
+    if (isRedirectError(error)) throw error;
     redirect('/login');
   }
 }
