@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import { useRouter } from 'next/navigation';
 import { Clock, ChevronRight, CheckCircle2, AlertCircle } from 'lucide-react';
@@ -42,7 +42,6 @@ function MealsLoadingSkeleton() {
         <Skeleton className="h-7 w-44 bg-zinc-800" />
         <Skeleton className="h-4 w-24 bg-zinc-800" />
       </div>
-      {/* Donut placeholder */}
       <Card className="space-y-4">
         <Skeleton className="h-4 w-32 bg-zinc-800" />
         <div className="flex items-center gap-4">
@@ -54,7 +53,6 @@ function MealsLoadingSkeleton() {
           </div>
         </div>
       </Card>
-      {/* Meal card skeletons */}
       {[1, 2, 3, 4].map((i) => (
         <Skeleton key={i} className="h-20 w-full rounded-2xl bg-zinc-800" />
       ))}
@@ -105,7 +103,10 @@ function MealCard({ meal, completed, onComplete }: { meal: Meal; completed: bool
         {!completed && (
           <button
             className="mt-3 w-full py-1.5 rounded-lg bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-400 text-xs font-medium transition-colors"
-            onClick={(e) => { e.stopPropagation(); onComplete(); }}
+            onClick={(e) => {
+              e.stopPropagation();
+              onComplete();
+            }}
           >
             Tandai Sudah Makan
           </button>
@@ -118,19 +119,53 @@ function MealCard({ meal, completed, onComplete }: { meal: Meal; completed: bool
 // ─── Main Page ─────────────────────────────────────────────────────
 export default function MealsPage() {
   const profile = useUserStore((s) => s.profile);
-  const { todayMealPlan, completedMeals, completeMeal, currentPhase, loadTodayPlan } = usePhaseStore();
-  const [isInitializing, setIsInitializing] = useState(!todayMealPlan);
+  const { todayMealPlan, completedMeals, completeMeal, currentPhase } = usePhaseStore();
+  const [hasLoaded, setHasLoaded] = useState(false);
+
+  useEffect(() => {
+    setHasLoaded(false);
+    const timer = window.setTimeout(() => setHasLoaded(true), 3000);
+
+    return () => window.clearTimeout(timer);
+  }, [profile?.current_phase, profile?.current_week]);
+
+  useEffect(() => {
+    if (todayMealPlan !== null) {
+      setHasLoaded(true);
+    }
+  }, [todayMealPlan]);
 
   const meals: Meal[] = todayMealPlan?.meals ?? [];
   const today = DAYS_ID[new Date().getDay()];
 
-  // Show skeleton on first load while plan loads
-  if (isInitializing && meals.length === 0) {
-    // Auto-dismiss skeleton once data arrives
-    if (todayMealPlan) {
-      setIsInitializing(false);
-    }
+  if (!hasLoaded && !todayMealPlan) {
     return <MealsLoadingSkeleton />;
+  }
+
+  if (hasLoaded && !todayMealPlan) {
+    return (
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="space-y-4 pb-6"
+      >
+        <div>
+          <div className="flex items-center gap-2">
+            <h1 className="text-xl font-bold text-white">Menu Hari Ini</h1>
+            <Badge className="bg-blue-600/20 text-blue-400 border-blue-500/30 text-xs">
+              Fase {currentPhase}
+            </Badge>
+          </div>
+          <p className="text-sm text-zinc-400 mt-0.5">{today}</p>
+        </div>
+
+        <Card className="text-center py-6">
+          <AlertCircle className="h-8 w-8 text-zinc-600 mx-auto mb-2" />
+          <p className="text-sm text-zinc-400">Belum ada menu untuk hari ini</p>
+          <p className="text-xs text-zinc-600 mt-1">Coba lagi beberapa saat atau cek fase programmu.</p>
+        </Card>
+      </motion.div>
+    );
   }
 
   const totals = meals.reduce(
@@ -156,7 +191,6 @@ export default function MealsPage() {
       animate={{ opacity: 1, y: 0 }}
       className="space-y-4 pb-6"
     >
-      {/* Header */}
       <div>
         <div className="flex items-center gap-2">
           <h1 className="text-xl font-bold text-white">Menu Hari Ini</h1>
@@ -167,7 +201,6 @@ export default function MealsPage() {
         <p className="text-sm text-zinc-400 mt-0.5">{today}</p>
       </div>
 
-      {/* Phase 4 IF Banner */}
       {currentPhase === 4 && (
         <Card className="bg-amber-900/30 border-amber-500/30">
           <div className="flex items-center gap-2">
@@ -180,11 +213,9 @@ export default function MealsPage() {
         </Card>
       )}
 
-      {/* Macro Summary */}
       <Card className="space-y-4">
         <p className="text-xs uppercase tracking-widest text-zinc-500 font-medium">Ringkasan Makro</p>
         <div className="flex items-center gap-4">
-          {/* Donut */}
           <div className="w-24 h-24 flex-shrink-0">
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
@@ -207,7 +238,6 @@ export default function MealsPage() {
               </PieChart>
             </ResponsiveContainer>
           </div>
-          {/* Macro labels */}
           <div className="flex-1 space-y-1.5">
             <div className="flex justify-between text-xs">
               <span className="text-zinc-400">Kalori</span>
@@ -226,14 +256,12 @@ export default function MealsPage() {
             ))}
           </div>
         </div>
-        {/* Progress */}
         <div className="flex items-center gap-2 text-xs text-zinc-400 pt-1 border-t border-zinc-800/60">
           <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" />
           <span>{completedMeals.length} dari {meals.length} meal selesai</span>
         </div>
       </Card>
 
-      {/* No meals state */}
       {meals.length === 0 && (
         <Card className="text-center py-6">
           <AlertCircle className="h-8 w-8 text-zinc-600 mx-auto mb-2" />
@@ -242,7 +270,6 @@ export default function MealsPage() {
         </Card>
       )}
 
-      {/* Meal list */}
       <div className="space-y-3">
         {meals.map((meal) => (
           <MealCard
@@ -250,13 +277,14 @@ export default function MealsPage() {
             meal={meal}
             completed={completedMeals.includes(meal.id)}
             onComplete={() => {
-              if (profile?.id) void completeMeal(profile.id, meal.id);
+              if (profile?.id) {
+                void completeMeal(profile.id, meal.id);
+              }
             }}
           />
         ))}
       </div>
 
-      {/* Time context */}
       {meals.length > 0 && (
         <Card className="flex items-center gap-2 text-xs text-zinc-500">
           <Clock className="h-3.5 w-3.5" />
