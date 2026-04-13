@@ -53,6 +53,8 @@ function MacroBar({ label, value, max, color }: { label: string; value: number; 
   );
 }
 
+// ─── Main Page ─────────────────────────────────────────────────────
+
 // ─── Skeleton Loading ──────────────────────────────────────────────
 function MealDetailSkeleton() {
   return (
@@ -78,7 +80,6 @@ function MealDetailSkeleton() {
   );
 }
 
-// ─── Main Page ─────────────────────────────────────────────────────
 export default function MealDetailPage() {
   const router = useRouter();
   const params = useParams();
@@ -133,7 +134,7 @@ export default function MealDetailPage() {
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
-      className="space-y-4 pb-36"
+      className="space-y-4 pb-28"
     >
       {/* Back */}
       <button
@@ -197,6 +198,8 @@ export default function MealDetailPage() {
           </p>
           <div className="divide-y divide-zinc-800/60">
             {ingredients.map((ing, idx) => {
+              // quantity_description contains the full human-readable label
+              // e.g. "6 putih telur", "250g dada ayam", "1 genggam bayam segar"
               const food = (ing as unknown as { food?: { name?: string } }).food;
               const displayName =
                 ing.quantity_description ??
@@ -238,7 +241,7 @@ export default function MealDetailPage() {
       )}
 
       {/* Fixed CTA */}
-      <div className="fixed bottom-[calc(5rem+env(safe-area-inset-bottom))] left-1/2 -translate-x-1/2 w-full max-w-[480px] px-4">
+      <div className="fixed bottom-[calc(env(safe-area-inset-bottom)+5rem)] left-1/2 -translate-x-1/2 w-full max-w-[480px] px-4 z-50">
         <Button
           className={`w-full h-12 text-base font-semibold transition-all ${
             isCompleted
