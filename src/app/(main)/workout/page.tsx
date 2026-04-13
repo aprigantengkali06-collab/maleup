@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useRouter } from 'next/navigation';
 import { Timer, ChevronDown, ChevronUp, Dumbbell, BedDouble, CheckCircle2, Zap, Flame } from 'lucide-react';
@@ -13,36 +13,49 @@ import { usePhaseStore } from '@/lib/stores/phaseStore';
 import { useUserStore } from '@/lib/stores/userStore';
 
 const WORKOUT_TYPE_LABEL: Record<string, string> = {
-  rest: 'Hari Istirahat', walk: 'Jalan Kaki', strength_upper: 'Latihan Atas',
-  strength_lower: 'Latihan Bawah', full_body: 'Full Body', hiit: 'HIIT',
-  tabata: 'Tabata', mobility: 'Mobilitas',
+  rest: 'Hari Istirahat',
+  walk: 'Jalan Kaki',
+  strength_upper: 'Latihan Atas',
+  strength_lower: 'Latihan Bawah',
+  full_body: 'Full Body',
+  hiit: 'HIIT',
+  tabata: 'Tabata',
+  mobility: 'Mobilitas',
 };
+
 const WORKOUT_TYPE_COLOR: Record<string, string> = {
-  rest: 'bg-zinc-700/40 text-zinc-400 border-zinc-600/30', walk: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30',
-  strength_upper: 'bg-blue-500/20 text-blue-400 border-blue-500/30', strength_lower: 'bg-purple-500/20 text-purple-400 border-purple-500/30',
-  full_body: 'bg-blue-500/20 text-blue-400 border-blue-500/30', hiit: 'bg-red-500/20 text-red-400 border-red-500/30',
-  tabata: 'bg-orange-600/20 text-orange-400 border-orange-600/30', mobility: 'bg-teal-500/20 text-teal-400 border-teal-500/30',
+  rest: 'bg-zinc-700/40 text-zinc-400 border-zinc-600/30',
+  walk: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30',
+  strength_upper: 'bg-blue-500/20 text-blue-400 border-blue-500/30',
+  strength_lower: 'bg-purple-500/20 text-purple-400 border-purple-500/30',
+  full_body: 'bg-blue-500/20 text-blue-400 border-blue-500/30',
+  hiit: 'bg-red-500/20 text-red-400 border-red-500/30',
+  tabata: 'bg-orange-600/20 text-orange-400 border-orange-600/30',
+  mobility: 'bg-teal-500/20 text-teal-400 border-teal-500/30',
 };
+
 const INTENSITY_COLOR: Record<string, string> = {
-  low: 'bg-emerald-500/20 text-emerald-400', medium: 'bg-amber-500/20 text-amber-400',
-  high: 'bg-orange-500/20 text-orange-400', max: 'bg-red-500/20 text-red-400',
+  low: 'bg-emerald-500/20 text-emerald-400',
+  medium: 'bg-amber-500/20 text-amber-400',
+  high: 'bg-orange-500/20 text-orange-400',
+  max: 'bg-red-500/20 text-red-400',
 };
 
 function ExerciseCard({ exercise, index }: { exercise: any; index: number }) {
   const [expanded, setExpanded] = useState(false);
-  const sets       = exercise.sets ?? 3;
-  const reps       = exercise.reps ?? null;        // string like "10 repetisi" or "30 detik"
-  const workSec    = exercise.work_seconds ?? null; // number | null
-  const restSec    = exercise.rest_seconds ?? null;
-  const intensity  = exercise.intensity ?? 'medium';
+  const sets = exercise.sets ?? 3;
+  const reps = exercise.reps ?? null;
+  const workSec = exercise.work_seconds ?? null;
+  const restSec = exercise.rest_seconds ?? null;
+  const intensity = exercise.intensity ?? 'medium';
   const muscleGroup = exercise.muscle_group ?? '';
   const instructions = exercise.instructions ?? exercise.description ?? '';
-  // Build a clean label: prefer reps string, fall back to seconds, then bare set count
+
   const setsLabel = reps
     ? (sets > 1 ? `${sets}× ` : '') + reps
     : workSec
-    ? `${sets}×${workSec}s`
-    : `${sets} set`;
+      ? `${sets}×${workSec}s`
+      : `${sets} set`;
 
   return (
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: index * 0.05 }}>
@@ -78,8 +91,6 @@ function ExerciseCard({ exercise, index }: { exercise: any; index: number }) {
   );
 }
 
-
-// ─── Skeleton Loading ──────────────────────────────────────────────
 function WorkoutLoadingSkeleton() {
   return (
     <div className="space-y-4 pb-6">
@@ -98,31 +109,53 @@ function WorkoutLoadingSkeleton() {
 export default function WorkoutPage() {
   const router = useRouter();
   const profile = useUserStore((s) => s.profile);
-  const { todayWorkout, todayKegel, completedWorkout, completedKegel, completeWorkout, completeKegel, currentPhase } = usePhaseStore();
+  const {
+    todayWorkout,
+    todayKegel,
+    completedWorkout,
+    completedKegel,
+    completeWorkout,
+    completeKegel,
+    currentPhase,
+  } = usePhaseStore();
+  const [hasLoaded, setHasLoaded] = useState(false);
 
-  const [isInitializing] = useState(!todayWorkout);
+  useEffect(() => {
+    setHasLoaded(false);
+    const timer = window.setTimeout(() => setHasLoaded(true), 3000);
 
-  if (isInitializing && !todayWorkout) {
+    return () => window.clearTimeout(timer);
+  }, [profile?.current_phase, profile?.current_week]);
+
+  useEffect(() => {
+    if (todayWorkout !== null) {
+      setHasLoaded(true);
+    }
+  }, [todayWorkout]);
+
+  if (!hasLoaded && !todayWorkout) {
     return <WorkoutLoadingSkeleton />;
   }
 
-  if (!todayWorkout) {
+  if (hasLoaded && !todayWorkout) {
     return (
       <div className="flex flex-col items-center justify-center py-20 text-center space-y-3">
         <Dumbbell className="h-12 w-12 text-zinc-700" />
-        <p className="text-zinc-400">Workout hari ini belum tersedia</p>
+        <p className="text-zinc-400">Workout belum tersedia</p>
+        <p className="text-xs text-zinc-600">Coba lagi beberapa saat atau cek fase programmu.</p>
       </div>
     );
   }
 
-  const workoutType = (todayWorkout.workout_type ?? 'full_body') as string;
+  const activeWorkout = todayWorkout!;
+  const workoutType = (activeWorkout.workout_type ?? 'full_body') as string;
   const isRest = workoutType === 'rest';
   const isTimerWorkout = workoutType === 'hiit' || workoutType === 'tabata';
-  const exercises = (todayWorkout as any).exercises ?? [];
+  const exercises = (activeWorkout as any).exercises ?? [];
 
   const handleComplete = async () => {
     if (!profile) return;
-    await completeWorkout(profile.id, todayWorkout.id);
+    await completeWorkout(profile.id, activeWorkout.id);
     toast.success('Workout selesai! 💪', { description: 'Kerja bagus, terus konsisten!' });
   };
 
@@ -157,11 +190,11 @@ export default function WorkoutPage() {
             <div className="grid grid-cols-3 gap-3 text-center">
               <div>
                 <p className="text-xs text-zinc-500">Durasi</p>
-                <p className="text-base font-bold text-white mt-0.5">{(todayWorkout as any).duration_minutes ?? 45}<span className="text-xs font-normal text-zinc-500"> mnt</span></p>
+                <p className="text-base font-bold text-white mt-0.5">{(activeWorkout as any).duration_minutes ?? 45}<span className="text-xs font-normal text-zinc-500"> mnt</span></p>
               </div>
               <div>
                 <p className="text-xs text-zinc-500">Kalori</p>
-                <p className="text-base font-bold text-amber-400 mt-0.5">~{(todayWorkout as any).estimated_calories_burned ?? 300}<span className="text-xs font-normal text-zinc-500"> kcal</span></p>
+                <p className="text-base font-bold text-amber-400 mt-0.5">~{(activeWorkout as any).estimated_calories_burned ?? 300}<span className="text-xs font-normal text-zinc-500"> kcal</span></p>
               </div>
               <div>
                 <p className="text-xs text-zinc-500">Exercise</p>
@@ -169,16 +202,19 @@ export default function WorkoutPage() {
               </div>
             </div>
           </Card>
+
           {exercises.length > 0 && (
             <div className="space-y-2">
               <p className="text-xs uppercase tracking-widest text-zinc-500 font-medium">Daftar Latihan</p>
               {exercises.map((ex: any, i: number) => <ExerciseCard key={ex.id ?? i} exercise={ex} index={i} />)}
             </div>
           )}
+
           <div className="space-y-2 pt-2">
             {isTimerWorkout ? (
               <Button className="w-full h-12 bg-red-600 hover:bg-red-500 text-white font-semibold text-base" onClick={() => router.push('/workout/timer')}>
-                <Flame className="h-5 w-5 mr-2" />{workoutType === 'tabata' ? 'Mulai Tabata Timer' : 'Mulai HIIT Timer'}
+                <Flame className="h-5 w-5 mr-2" />
+                {workoutType === 'tabata' ? 'Mulai Tabata Timer' : 'Mulai HIIT Timer'}
               </Button>
             ) : (
               <Button className={`w-full h-12 font-semibold text-base ${completedWorkout ? 'bg-emerald-700 text-emerald-100 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-500 text-white'}`} disabled={completedWorkout} onClick={() => void handleComplete()}>
